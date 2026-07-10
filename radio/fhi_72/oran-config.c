@@ -666,7 +666,10 @@ static bool set_fh_io_cfg(struct xran_io_cfg *io_cfg, const paramdef_t *fhip, in
   io_cfg->nEthLineSpeed = *gpd(fhip, nump, ORAN_CONFIG_NETHSPEED)->uptr; // 10G,25G,40G,100G speed of Physical connection on O-RU
 #if defined K_RELEASE
   io_cfg->num_mbuf_alloc = NUM_MBUFS; // number of mbuf allocated by DPDK (optimal is n = (2^q - 1))
-  io_cfg->num_mbuf_vf_alloc = NUM_MBUFS_VF; // number of mbuf allocated by DPDK (optimal is n = (2^q - 1))
+  /* NUM_MBUFS_VF (1M) exhausts the NXP DPAA2 BMAN FBPR hardware buffer-manager.
+   * NUM_MBUFS_SMALL (16383) is sufficient for bbu_offload=0 where the indirect
+   * pool is not heavily used at runtime. */
+  io_cfg->num_mbuf_vf_alloc = NUM_MBUFS_SMALL;
 #endif
   io_cfg->one_vf_cu_plane = (io_cfg->num_vfs == num_rus); // C-plane and U-plane use one VF
 
@@ -1274,10 +1277,15 @@ static bool set_fh_config(void *mplane_api, int ru_idx, int num_rus, enum xran_c
   fh_config->puschMaskSlot = 0; // specific which slot PUSCH channel masked; only used if id = O_RU
 #if defined K_RELEASE
   fh_config->csirsEnable = 0; // enable CSI-RS (Cat B specific)
-#elif defined F_RELEASE
-  fh_config->cp_vlan_tag = 0; // C-plane VLAN tag; not used in xran; needed for M-plane
-  fh_config->up_vlan_tag = 0; // U-plane VLAN tag; not used in xran; needed for M-plane
 #endif
+  {
+    /* Read 802.1Q VLAN tag from config (0 = no VLAN, same tag used for C/U-plane) */
+    paramdef_t vp[] = {{ORAN_CONFIG_VLAN_TAG, "VLAN tag\n", 0, .iptr = NULL, .defintarrayval = NULL, TYPE_INTARRAY, 0}};
+    config_get(config_get_if(), vp, 1, CONFIG_STRING_ORAN);
+    uint16_t vlan = (vp[0].numelt > 0 && vp[0].iptr != NULL) ? (uint16_t)vp[0].iptr[0] : 0;
+    fh_config->cp_vlan_tag = vlan;
+    fh_config->up_vlan_tag = vlan;
+  }
   fh_config->debugStop = 0; // enable auto stop; only used if id = O_RU
   fh_config->debugStopCount = 0; // enable auto stop after number of Tx packets; not used in xran
   fh_config->DynamicSectionEna = 0; // enable dynamic C-Plane section allocation

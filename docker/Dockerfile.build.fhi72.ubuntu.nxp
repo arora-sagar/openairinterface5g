@@ -1,0 +1,167 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
+#---------------------------------------------------------------------
+#
+# Dockerfile for the Open-Air-Interface RAN Build for FHI 7.2
+#               Valid for UBUNTU 24.04
+#
+#---------------------------------------------------------------------
+
+FROM ran-base AS ran-build-fhi72
+
+ARG E2AP_VERSION=E2AP_V3
+ARG KPM_VERSION=KPM_V3_00
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe
+RUN apt-get update && \
+    apt-get upgrade --yes && \
+    apt-get install --yes \
+        meson \
+        wget \
+        xz-utils \
+        pkg-config \
+        python3-pyelftools \
+        libnuma-dev \
+        ## libraries for mellanox NIC
+        libibverbs-dev \
+        rdma-core && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN rm -Rf /oai-ran
+WORKDIR /oai-ran
+COPY . .
+
+## Build ARM RAL only for aarch64 (used only for compression)
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+      git clone https://git.gitlab.arm.com/networking/ral.git /opt/ral; \
+      cd /opt/ral; \
+      git checkout armral-25.01; \
+      mkdir -p build; \
+      cd build; \
+      cmake -GNinja -DBUILD_SHARED_LIBS=On ..; \
+      ninja; \
+      ninja install; \
+    else \
+      echo "Skipping RAL build: not aarch64"; \
+    fi
+
+## Extra build-time deps for DPAA2/fsl-mc on aarch64 (NXP LX2160A)
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends \
+        libfdt-dev libssl-dev libpcap-dev && \
+      rm -rf /var/lib/apt/lists/*; \
+    fi
+
+## GCC wrapper: appends -march=armv8-a -mno-outline-atomics as the final compiler args.
+## GCC honours the last -march, so this wins over what DPDK's meson config injects —
+## required to keep the binary free of LSE atomics on Cortex-A72 (ARMv8.0-A / LX2160A).
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+      printf '#!/bin/bash\nexec /usr/bin/gcc "$@" -march=armv8-a -mno-outline-atomics\n' \
+          > /usr/local/bin/gcc-cortex-a72 && chmod +x /usr/local/bin/gcc-cortex-a72 && \
+      printf '#!/bin/bash\nexec /usr/bin/g++ "$@" -march=armv8-a -mno-outline-atomics\n' \
+          > /usr/local/bin/g++-cortex-a72 && chmod +x /usr/local/bin/g++-cortex-a72; \
+    fi
+
+## Download DPDK: 25.11 for aarch64/NXP LX2160A (DPAA2/fsl-mc), 24.11.4 for x86_64
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+      wget --no-verbose https://fast.dpdk.org/rel/dpdk-25.11.tar.xz && \
+      tar -xf dpdk-25.11.tar.xz && mv dpdk-25.11 dpdk-src && rm dpdk-25.11.tar.xz; \
+    else \
+      wget --no-verbose http://fast.dpdk.org/rel/dpdk-24.11.4.tar.xz && \
+      tar -xf dpdk-24.11.4.tar.xz && mv dpdk-stable-24.11.4 dpdk-src && rm dpdk-24.11.4.tar.xz; \
+    fi
+
+## Apply NXP DPAA2 patches and strip LSE atomics from ARM meson config (aarch64 only)
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+      for p in $(ls /oai-ran/docker/dpdk-patches/nxp-lx2160a/*.patch | sort); do \
+          echo "Applying $p" && patch -p1 -d dpdk-src --fuzz=5 < "$p"; \
+      done && \
+      python3 /oai-ran/docker/dpdk-patches/nxp-lx2160a/strip_lse.py \
+          dpdk-src/config/arm/meson.build; \
+    fi
+
+## Configure, build, and install DPDK to /usr/local
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+      printf '[binaries]\nc = '"'"'/usr/local/bin/gcc-cortex-a72'"'"'\ncpp = '"'"'/usr/local/bin/g++-cortex-a72'"'"'\n' \
+          > /tmp/cortex-a72.ini && \
+      meson setup dpdk-src/build dpdk-src \
+          --native-file /tmp/cortex-a72.ini \
+          --prefix=/usr/local \
+          -Dcpu_instruction_set=cortex-a72 \
+          -Dplatform=generic \
+          -Ddisable_drivers=net/hns3,net/cnxk; \
+    else \
+      meson setup dpdk-src/build dpdk-src --prefix=/usr/local; \
+    fi && \
+    ninja -C dpdk-src/build && \
+    ninja install -C dpdk-src/build && \
+    ldconfig
+
+## Build LL/SC shim: forces __aarch64_have_lse_atomics=0 at process start so the
+## outline-atomics stubs never take the LSE path — SIGILL-safe on Cortex-A72.
+## Deploy at runtime: LD_PRELOAD=/usr/local/lib/aarch64-linux-gnu/libforce_no_lse.so
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+      printf '%s\n%s\n%s\n%s\n' \
+          'extern int __aarch64_have_lse_atomics __attribute__((visibility("hidden"), weak));' \
+          '__attribute__((constructor(101)))' \
+          'static void force_no_lse_atomics(void)' \
+          '{ if (&__aarch64_have_lse_atomics) __aarch64_have_lse_atomics = 0; }' \
+          > /tmp/force_no_lse.c && \
+      /usr/local/bin/gcc-cortex-a72 -shared -fPIC \
+          -o /usr/local/lib/aarch64-linux-gnu/libforce_no_lse.so /tmp/force_no_lse.c; \
+    fi
+
+## Verify no LSE atomics outside HWCAP-guarded outline-atomics stubs (aarch64 only)
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+      lib=$(find /usr/local -name 'librte_bus_fslmc.so*' ! -type l | head -n1) && \
+      echo "Checking $lib for unsafe LSE atomics..." && \
+      UNSAFE=$(objdump -d "$lib" | awk '/^[[:xdigit:]]+ <__aarch64_(cas|ldadd|swp)[^>]*>:/{s=1;next}/^[[:xdigit:]]+ <[^>]+>:/{s=0}!s&&/\b(casa|casal|casl|cas|ldadd|ldadda|ldaddal|swp|swpa|swpal)\b/{print}') && \
+      if [ -n "$UNSAFE" ]; then \
+          echo "ERROR: LSE atomics in user code — SIGILL on Cortex-A72:"; \
+          echo "$UNSAFE"; exit 1; \
+      fi && \
+      echo "OK: No unsafe LSE atomics in $lib"; \
+    fi
+
+## Build Fronthaul library
+## aarch64/NXP LX2160A: build from the in-tree o-du-phy fork which carries the
+##   DPAA2/fsl-mc EAL fixes, the armv8 Makefile updates, and OAI integration.
+## x86_64: clone upstream oran_f_release_v1.0 and apply the OAI patch (unchanged path).
+## Both: replace __rte_packed with __attribute__((__packed__)) — the DPDK 24.11+
+##   deprecation wrapper emits a _Pragma that is illegal inside a struct definition.
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+      cp -r /oai-ran/o-du-phy /opt/phy; \
+    else \
+      git clone https://gerrit.o-ran-sc.org/r/o-du/phy.git /opt/phy && \
+      cd /opt/phy && \
+      git checkout oran_f_release_v1.0 && \
+      git apply /oai-ran/cmake_targets/tools/oran_fhi_integration_patches/F/oaioran_F.patch; \
+    fi && \
+    find /opt/phy/fhi_lib/lib/api -name '*.h' \
+        -exec sed -i 's/__rte_packed/__attribute__((__packed__))/g' {} + && \
+    cd /opt/phy/fhi_lib/lib && \
+    if [ "$(uname -m)" = "aarch64" ]; then \
+      TARGET=armv8 WIRELESS_SDK_TOOLCHAIN=gcc RTE_SDK=/usr/local XRAN_DIR=/opt/phy/fhi_lib make XRAN_LIB_SO=1; \
+    else \
+      WIRELESS_SDK_TOOLCHAIN=gcc RTE_SDK=/usr/local XRAN_DIR=/opt/phy/fhi_lib make XRAN_LIB_SO=1; \
+    fi
+  
+## Build and install OAI
+RUN EXTRA_CMAKE_OPTS=""; \
+    if [ "$(uname -m)" = "aarch64" ]; then \
+      EXTRA_CMAKE_OPTS="-Darmral_LOCATION=/opt/ral"; \
+      echo "ARM64 detected -> enabling RAL: $EXTRA_CMAKE_OPTS"; \
+    fi; \
+    \
+    /bin/sh oaienv && \
+    cd cmake_targets && \
+    mkdir -p log && \
+    ./build_oai \
+      --ninja --gNB \
+      -t oran_fhlib_5g \
+      --cmake-opt -Dxran_LOCATION=/opt/phy/fhi_lib/lib \
+      $BUILD_OPTION && \
+    ldd ran_build/build/nr-softmodem && \
+    ldd ran_build/build/liboran_fhlib_5g.so && \
+    ldd /opt/phy/fhi_lib/lib/build/libxran.so
+

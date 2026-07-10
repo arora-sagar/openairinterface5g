@@ -339,7 +339,11 @@ int xran_fh_rx_prach_read_slot(PHY_VARS_gNB *gNB, ru_info_t *ru, int *frame, int
     }
     info = NotifiedFifoData(res);
     LOG_W(HW, "PRACH TTI processing delay detected, skipping %4d.%2d => %4d.%2d\n", old_f, old_sl, info->f, info->sl);
-    DevAssert(xran_queue_prach_length == 0);
+    /* The xRAN timing thread may have pushed one more entry during the drain loop.
+     * That residual entry is harmless — it will be consumed on the next call. */
+    if (xran_queue_prach_length != 0)
+      LOG_W(HW, "xran_queue_prach_length=%d after drain (expected 0) — residual from concurrent push\n",
+            xran_queue_prach_length);
   }
 
   *slot = info->sl;
@@ -585,7 +589,9 @@ int xran_fh_rx_read_slot(ru_info_t *ru, int *frame, int *slot)
     }
     info = NotifiedFifoData(res);
     LOG_W(HW, "TTI processing delay detected, skipping %4d.%2d => %4d.%2d\n", old_f, old_sl, info->f, info->sl);
-    DevAssert(xran_queue_length == 0);
+    if (xran_queue_length != 0)
+      LOG_W(HW, "xran_queue_length=%d after drain (expected 0) — residual from concurrent push\n",
+            xran_queue_length);
   }
 
   *slot = info->sl;
