@@ -80,8 +80,7 @@ void mac_rlc_data_ind     (
     rb->set_time(rb, rlc_current_time);
     rb->recv_pdu(rb, buffer_pP, tb_sizeP);
   } else {
-    LOG_E(RLC, "fatal: no RB found (rnti %x channel ID %d)\n", rnti, channel_id);
-    exit(1);
+    LOG_W(RLC, "no RB found (rnti %x channel ID %d), dropping PDU\n", rnti, channel_id);
   }
 
   rlc_manager_unlock(rlc_ue_manager);
