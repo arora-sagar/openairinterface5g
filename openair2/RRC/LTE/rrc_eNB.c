@@ -1195,7 +1195,8 @@ rrc_eNB_generate_RRCConnectionReestablishment(
         LOG_D(RRC, PROTOCOL_RRC_CTXT_UE_FMT" RRC_eNB --- MAC_CONFIG_REQ  (SRB1) ---> MAC_eNB\n",
               PROTOCOL_RRC_CTXT_UE_ARGS(ctxt_pP));
 
-        const rrc_mac_config_req_eNB_t tmp = {.CC_id = ue_context->primaryCC_id,
+        const rrc_mac_config_req_eNB_t tmp = {.rnti = rnti,
+                                              .CC_id = ue_context->primaryCC_id,
                                               .physicalConfigDedicated = ue_context->physicalConfigDedicated,
                                               .mac_MainConfig = ue_context->mac_MainConfig,
                                               .logicalChannelIdentity = 1,
