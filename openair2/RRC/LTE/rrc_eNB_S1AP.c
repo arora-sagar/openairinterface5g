@@ -889,6 +889,8 @@ int rrc_eNB_process_S1AP_INITIAL_CONTEXT_SETUP_REQ(MessageDef *msg_p, const char
       int i;
       memset(&create_tunnel_req, 0, sizeof(create_tunnel_req));
       ue_context_p->ue_context.nb_of_e_rabs = S1AP_INITIAL_CONTEXT_SETUP_REQ (msg_p).nb_of_e_rabs;
+      ue_context_p->ue_context.setup_e_rabs = ue_context_p->ue_context.nb_of_e_rabs;
+      ue_context_p->ue_context.ics_resp_pending = false;
 
       for (i = 0; i < ue_context_p->ue_context.nb_of_e_rabs; i++) {
         ue_context_p->ue_context.e_rab[i].status = E_RAB_STATUS_NEW;
@@ -1202,7 +1204,7 @@ int rrc_eNB_process_S1AP_E_RAB_SETUP_REQ(MessageDef *msg_p, const char *msg_name
         LOG_I(RRC,"E_RAB setup REQ: local index %d teid %u, eps id %d \n",
               i,
               create_tunnel_req.sgw_S1u_teid[e_rab_done],
-              create_tunnel_req.eps_bearer_id[i] );
+              create_tunnel_req.eps_bearer_id[e_rab_done] );
         inde_list[e_rab_done] = i;
         e_rab_done++;
 
@@ -1234,6 +1236,10 @@ int rrc_eNB_process_S1AP_E_RAB_SETUP_REQ(MessageDef *msg_p, const char *msg_name
         &create_tunnel_resp,
         &inde_list[0]);
       ue_context_p->ue_context.setup_e_rabs+=nb_e_rabs_tosetup;
+      /* New E-RABs can land in any free slot of e_rab[] (e.g. after a reused context), and
+       * the dedicated reconfiguration only scans slots below setup_e_rabs: cover them all. */
+      if (e_rab_done > 0 && ue_context_p->ue_context.setup_e_rabs < inde_list[e_rab_done - 1] + 1)
+        ue_context_p->ue_context.setup_e_rabs = inde_list[e_rab_done - 1] + 1;
     }
     /* TODO parameters yet to process ... */
     {

@@ -577,6 +577,8 @@ typedef struct eNB_RRC_UE_s {
   int                                setup_e_rabs;
   /* Number of e_rab to be setup in the list */
   int                                nb_of_e_rabs;
+  /* Initial Context Setup Response waits for the DRBs of E-RABs beyond the default one */
+  bool                               ics_resp_pending;
   /* SRB2 config kept across reestablishments: the reestablishment message only carries SRB1.
    * Borrowed pointer, not owned: valid only because the SRB_configList/SRB_configList2 rebuilds
    * free the list wrappers and never their elements. A deep free of those lists must clear this. */
