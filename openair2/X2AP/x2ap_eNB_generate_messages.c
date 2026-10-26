@@ -1297,6 +1297,9 @@ MCC_MNC_TO_PLMNID(instance_p->mcc, instance_p->mnc, instance_p->mnc_digit_length
             case 121:
               servedCellMember->servedNRCellInfo.nrModeInfo.choice.tdd.nR_TxBW.nRNRB = X2AP_NRNRB_nrb121;
               break;
+            case 189:
+              servedCellMember->servedNRCellInfo.nrModeInfo.choice.tdd.nR_TxBW.nRNRB = X2AP_NRNRB_nrb189;
+              break;
             case 217:
               servedCellMember->servedNRCellInfo.nrModeInfo.choice.tdd.nR_TxBW.nRNRB = X2AP_NRNRB_nrb217;
               break;
