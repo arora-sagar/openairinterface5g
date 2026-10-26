@@ -1290,6 +1290,9 @@ rrc_eNB_process_RRCConnectionReestablishmentComplete(
     }
   }
 
+  if (SRB2_config == NULL)
+    SRB2_config = ue_context_pP->ue_context.saved_SRB2_config;
+
   SRB_configList2 = &(ue_context_pP->ue_context.SRB_configList2[next_xid]);
   DRB_configList2 = &(ue_context_pP->ue_context.DRB_configList2[next_xid]);
 

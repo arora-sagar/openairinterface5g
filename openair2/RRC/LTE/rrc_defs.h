@@ -577,6 +577,10 @@ typedef struct eNB_RRC_UE_s {
   int                                setup_e_rabs;
   /* Number of e_rab to be setup in the list */
   int                                nb_of_e_rabs;
+  /* SRB2 config kept across reestablishments: the reestablishment message only carries SRB1.
+   * Borrowed pointer, not owned: valid only because the SRB_configList/SRB_configList2 rebuilds
+   * free the list wrappers and never their elements. A deep free of those lists must clear this. */
+  struct LTE_SRB_ToAddMod           *saved_SRB2_config;
   /* Number of e_rab to be modified in the list */
   int                                nb_of_modify_e_rabs;
   int                                nb_of_failed_e_rabs;

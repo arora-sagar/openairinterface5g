@@ -3839,6 +3839,12 @@ do_RRCConnectionReestablishment(
     SRB1_ul_SpecificParameters->logicalChannelGroup = logicalchannelgroup;
   }
 
+  /* the list rebuilt below only keeps SRB1: remember SRB2 so an overlapping reestablishment still finds it */
+  if (SRB2_config != NULL)
+    ue_context_pP->ue_context.saved_SRB2_config = SRB2_config;
+  else
+    SRB2_config = ue_context_pP->ue_context.saved_SRB2_config;
+
   if (SRB2_config == NULL) {
     LOG_W(RRC,"SRB2 configuration does not exist in SRB configuration list\n");
   } else {
