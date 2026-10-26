@@ -161,6 +161,11 @@ void prach_procedures(PHY_VARS_eNB *eNB, int br_flag)
     } // max_preamble_energy > prach_I0 + 100
     else {
       eNB->measurements.prach_I0 = ((eNB->measurements.prach_I0*900)>>10) + ((avg_preamble_energy[0]*124)>>10);
+      /* The noise correlation quantizes to ~0, so I0 sits near 0 and the threshold is effectively absolute.
+       * dB_fixed() of an empty average is negative and used to pull I0 to -8/-9 dB, lowering the threshold
+       * by that much and letting noise peaks through as false preambles. */
+      if (eNB->measurements.prach_I0 < 0)
+        eNB->measurements.prach_I0 = 0;
 
       if (frame==0) LOG_D(PHY,"prach_I0 = %d.%d dB\n",eNB->measurements.prach_I0/10,eNB->measurements.prach_I0%10);
 
