@@ -5867,7 +5867,11 @@ rrc_eNB_decode_ccch(
                 LOG_I(RRC, " S-TMSI exists, ue_context_p %p, old rnti %x => %lx\n", ue_context_p, ue_context_p->ue_context.rnti, ctxt_pP->rntiMaybeUEid);
 
                 LOG_I(PHY, "remove RNTI %04x\n", ue_context_p->ue_context.rnti);
-                rrc_mac_remove_ue(ctxt_pP->module_id, ue_context_p->ue_context.rnti);
+                /* Release the old RNTI like a normal UE release (PHY DLSCH/ULSCH/UCI, MAC, RLC, PDCP),
+                 * but keep the RRC context (removeFlag false) since it is reused for the new RNTI.
+                 * Removing it from the MAC only leaked one PHY DLSCH slot per reconnection; after
+                 * NUMBER_OF_DLSCH_MAX of them no new UE could get Msg4 ("illegal UE_id ... -1"). */
+                put_UE_in_freelist(ctxt_pP->module_id, ue_context_p->ue_context.rnti, false);
 
                 stmsi_received=1;
                 /* replace rnti in the context */
