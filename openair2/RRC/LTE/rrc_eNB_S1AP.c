@@ -220,6 +220,15 @@ rrc_eNB_S1AP_get_ue_ids(
           return NULL;
         }
 
+        if (ue_desc_p != NULL && ue_desc_p->ue_initial_id != UE_INITIAL_ID_INVALID) {
+          /* No DL message has associated eNB_ue_s1ap_id with the RRC UE yet (e.g. the MME releases the UE
+           * right after a TAU without active flag): associate it through the S1AP context's ue_initial_id.
+           * Removing the S1AP context here left the RRC/MAC UE without RRCConnectionRelease -> UL failure. */
+          rrc_ue_s1ap_ids_t *r = rrc_eNB_S1AP_get_ue_ids(rrc_instance_pP, ue_desc_p->ue_initial_id, eNB_ue_s1ap_id);
+          if (r != NULL)
+            return r;
+        }
+
         if (ue_desc_p != NULL) {
           struct s1ap_eNB_ue_context_s *s1ap_ue_context_p = NULL;
 
