@@ -663,10 +663,22 @@ ul_subframe2_k_phich(COMMON_channels_t *cc,
         return 255;
 
       case 2:
-      case 3:
-      case 4:
-      case 5:
         break;
+
+      case 3: /* PUSCH in 2,3,4 -> PHICH in 8,9,0 (36.213 Table 9.1.2-1) */
+        if (ul_subframe >= 2 && ul_subframe <= 4)
+          return 6;
+        return 255;
+
+      case 4: /* PUSCH in 2,3 -> PHICH in 8,9 */
+        if (ul_subframe == 2 || ul_subframe == 3)
+          return 6;
+        return 255;
+
+      case 5: /* PUSCH in 2 -> PHICH in 8 */
+        if (ul_subframe == 2)
+          return 6;
+        return 255;
     }
   }
 
