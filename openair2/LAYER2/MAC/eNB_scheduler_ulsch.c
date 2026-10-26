@@ -869,13 +869,14 @@ rx_sdu(const module_id_t enb_mod_idP,
         LOG_T(MAC, "\n");
 #endif
         if (rx_lcids[i] < NB_RB_MAX) {
-          if ((rx_lengths[i] > SCH_PAYLOAD_SIZE_MAX) || (rx_lengths[i] < 0) || (rx_lengths[i] > (sdu_lenP - (payload_ptr - sduP)))) {
-            LOG_E(MAC, "[eNB %d/%d] frame %d received DTCH of size %d (too big, maximum allowed is %d, sdu_len %d), dropping packet\n",
+          /* bound only by the received transport block: with UL 64QAM one RLC PDU can exceed 8192 bytes (max UL TBS ~9.4 kB) */
+          if ((rx_lengths[i] < 0) || (rx_lengths[i] > (sdu_lenP - (payload_ptr - sduP)))) {
+            LOG_E(MAC, "[eNB %d/%d] frame %d received DTCH of size %d (larger than the remaining %ld bytes of the %d-byte SDU), dropping packet\n",
                   enb_mod_idP,
                   CC_idP,
                   frameP,
                   rx_lengths[i],
-                  DCH_PAYLOAD_SIZE_MAX,
+                  (long)(sdu_lenP - (payload_ptr - sduP)),
                   sdu_lenP);
             UE_info->eNB_UE_stats[CC_idP][UE_id].num_errors_rx += 1;
             break;

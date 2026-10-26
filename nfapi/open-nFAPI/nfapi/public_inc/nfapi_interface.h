@@ -2841,7 +2841,7 @@ typedef struct {
  } nfapi_rx_indication_rel9_t;
 #define NFAPI_RX_INDICATION_REL9_TAG 0x2025
 
-#define NFAPI_RX_IND_DATA_MAX 8192
+#define NFAPI_RX_IND_DATA_MAX 12288 // max LTE UL TBS with 64QAM is ~9.4 kB (8192 asserted at MCS 28/90 RB)
 typedef struct {
 	nfapi_rx_ue_information rx_ue_information;
 	nfapi_rx_indication_rel8_t rx_indication_rel8;
