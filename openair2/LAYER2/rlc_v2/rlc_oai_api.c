@@ -874,8 +874,19 @@ rlc_op_status_t rrc_rlc_config_asn1_req (const protocol_ctxt_t   * const ctxt_pP
   }
 
   if (drb2release_listP != NULL) {
-    LOG_E(RLC, "%s:%d:%s: TODO\n", __FILE__, __LINE__, __FUNCTION__);
-    exit(1);
+    rlc_manager_lock(rlc_ue_manager);
+    rlc_ue_t *ue = rlc_manager_get_ue(rlc_ue_manager, rnti);
+    for (i = 0; i < drb2release_listP->list.count; i++) {
+      int drb_id = *drb2release_listP->list.array[i];
+      if (drb_id < 1 || drb_id > 5 || ue->drb[drb_id - 1] == NULL) {
+        LOG_W(RLC, "release of unknown DRB %d for RNTI %x ignored\n", drb_id, rnti);
+        continue;
+      }
+      ue->drb[drb_id - 1]->delete(ue->drb[drb_id - 1]);
+      ue->drb[drb_id - 1] = NULL;
+      LOG_I(RLC, "released DRB %d for RNTI %x\n", drb_id, rnti);
+    }
+    rlc_manager_unlock(rlc_ue_manager);
   }
 
   if (srb2add_listP != NULL) {
