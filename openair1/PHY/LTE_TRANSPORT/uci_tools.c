@@ -27,6 +27,19 @@ int find_uci(uint16_t rnti, int frame, int subframe, PHY_VARS_eNB *eNB,find_type
 
   if (type == SEARCH_EXIST) return(-1);
 
+  if (first_free_index == -1) {
+    /* entries of subframes whose RX processing was aborted are never consumed: reclaim the stale ones */
+    int now = frame * 10 + subframe;
+    for (int i = 0; i < NUMBER_OF_UCI_MAX; i++) {
+      int age = (now - (eNB->uci_vars[i].frame * 10 + eNB->uci_vars[i].subframe) + 10240) % 10240;
+      if (age > 20 && age < 10240 - 20) {
+        eNB->uci_vars[i].active = 0;
+        if (first_free_index == -1)
+          first_free_index = i;
+      }
+    }
+  }
+
   if (first_free_index==-1)
     LOG_E(MAC,"UCI table is full\n");
 
