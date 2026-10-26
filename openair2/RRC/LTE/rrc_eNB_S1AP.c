@@ -532,28 +532,38 @@ rrc_eNB_send_S1AP_INITIAL_CONTEXT_SETUP_RESP(
   msg_p = itti_alloc_new_message (TASK_RRC_ENB, 0, S1AP_INITIAL_CONTEXT_SETUP_RESP);
   S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).eNB_ue_s1ap_id = ue_context_pP->ue_context.eNB_ue_s1ap_id;
 
+  bool established = false;
+
+  /* Fill one response for all E-RABs and send it once: sending it per E-RAB queued the same
+   * message several times, so S1AP read it again after freeing it (crash with 2+ E-RABs). */
   for (e_rab = 0; e_rab < ue_context_pP->ue_context.nb_of_e_rabs; e_rab++) {
    if (ue_context_pP->ue_context.e_rab[e_rab].status == E_RAB_STATUS_DONE || ue_context_pP->ue_context.e_rab[e_rab].status == E_RAB_STATUS_TOMODIFY) {
-      e_rabs_done++;
-      S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).e_rabs[e_rab].e_rab_id = ue_context_pP->ue_context.e_rab[e_rab].param.e_rab_id;
+      int i = e_rabs_done++;
+      S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).e_rabs[i].e_rab_id = ue_context_pP->ue_context.e_rab[e_rab].param.e_rab_id;
       // TODO add other information from S1-U when it will be integrated
-      S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).e_rabs[e_rab].gtp_teid = ue_context_pP->ue_context.enb_gtp_teid[e_rab];
-      S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).e_rabs[e_rab].eNB_addr = ue_context_pP->ue_context.enb_gtp_addrs[e_rab];
-      S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).e_rabs[e_rab].eNB_addr.length = 4;
+      S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).e_rabs[i].gtp_teid = ue_context_pP->ue_context.enb_gtp_teid[e_rab];
+      S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).e_rabs[i].eNB_addr = ue_context_pP->ue_context.enb_gtp_addrs[e_rab];
+      S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).e_rabs[i].eNB_addr.length = 4;
       if (ue_context_pP->ue_context.e_rab[e_rab].status == E_RAB_STATUS_DONE) {
         ue_context_pP->ue_context.e_rab[e_rab].status = E_RAB_STATUS_ESTABLISHED;
-        S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).nb_of_e_rabs = e_rabs_done;
-        S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).nb_of_e_rabs_failed = e_rabs_failed;
-        itti_send_msg_to_task (TASK_S1AP, ctxt_pP->instance, msg_p);
+        established = true;
       }
 
     } else {
-      e_rabs_failed++;
+      int i = e_rabs_failed++;
       ue_context_pP->ue_context.e_rab[e_rab].status = E_RAB_STATUS_FAILED;
-      S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).e_rabs_failed[e_rab].e_rab_id = ue_context_pP->ue_context.e_rab[e_rab].param.e_rab_id;
+      S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).e_rabs_failed[i].e_rab_id = ue_context_pP->ue_context.e_rab[e_rab].param.e_rab_id;
       // TODO add cause when it will be integrated
     }
   }
+
+  S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).nb_of_e_rabs = e_rabs_done;
+  S1AP_INITIAL_CONTEXT_SETUP_RESP (msg_p).nb_of_e_rabs_failed = e_rabs_failed;
+
+  if (established)
+    itti_send_msg_to_task (TASK_S1AP, ctxt_pP->instance, msg_p);
+  else
+    itti_free (TASK_RRC_ENB, msg_p);
 }
 
 //------------------------------------------------------------------------------
