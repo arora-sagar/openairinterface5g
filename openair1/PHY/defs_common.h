@@ -1062,6 +1062,7 @@ static inline int timedwait_on_condition(pthread_mutex_t *mutex,
     }
 
     if ((waitret = pthread_cond_timedwait(cond,mutex,&abstime)) == 0) break; // this unlocks mutex_rxtx while waiting and then locks it again
+    if (waitret == ETIMEDOUT) break; // give up so the caller can drop the slot instead of waiting forever
   }
 
   AssertFatal((rc = pthread_mutex_unlock(mutex)) == 0,"[SCHED][eNB] timedwait_on_condition(): error unlocking mutex return %d for %s\n", rc, name);
