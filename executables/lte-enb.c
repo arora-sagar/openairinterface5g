@@ -446,7 +446,7 @@ int wakeup_txfh(PHY_VARS_eNB *eNB,
     ru_proc = &ru->proc;
     fp      = ru->frame_parms;
 
-    if (((fp->frame_type == TDD) && (subframe_select(fp,proc->subframe_tx)==SF_UL))||
+    if (((fp->frame_type == TDD) && (subframe_select(fp,subframe_tx)==SF_UL))||
         (eNB->RU_list[ru_id]->state == RU_SYNC)||
         (eNB->RU_list[ru_id]->wait_cnt>0)) {
       AssertFatal((ret=pthread_mutex_lock(&proc->mutex_RUs))==0, "mutex_lock returns %d\n",ret);
