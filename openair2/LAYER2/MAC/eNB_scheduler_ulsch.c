@@ -1309,6 +1309,11 @@ schedule_ulsch(module_id_t module_idP,
                                           sched_frame); // Nf
       for (int i = 0; i < 6; i++)
         cc->vrb_map_UL[start_rb + i] = 1;
+      /* one guard RB on each side: a strong PUSCH next to the PRACH leaks into the correlator (false preambles) */
+      if (start_rb > 0)
+        cc->vrb_map_UL[start_rb - 1] = 1;
+      if (start_rb + 6 < to_prb(cc->ul_Bandwidth))
+        cc->vrb_map_UL[start_rb + 6] = 1;
     }
 
     /* HACK: let's remove the PUCCH from available RBs
