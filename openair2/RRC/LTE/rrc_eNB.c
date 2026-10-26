@@ -1756,6 +1756,7 @@ rrc_eNB_process_RRCConnectionReestablishmentComplete(
   }
 
   LOG_I(RRC, "[RRCConnectionReestablishment]put UE %x into freeList\n", reestablish_rnti);
+  pdcp_save_drb_state_for_reestablishment(ctxt_pP->module_id, reestablish_rnti, ctxt_pP->rntiMaybeUEid);
   put_UE_in_freelist(ctxt_pP->module_id, reestablish_rnti, 0);
 }
 

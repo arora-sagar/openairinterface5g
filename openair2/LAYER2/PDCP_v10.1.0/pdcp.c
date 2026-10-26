@@ -108,6 +108,59 @@ notifiedFIFO_t         pdcp_sdu_list;
 
 pdcp_enb_t pdcp_enb[MAX_NUM_CCs];
 pthread_t pdcp_stats_thread_desc;
+
+/* AM DRB state carried over an RRC connection reestablishment, keyed by the new RNTI */
+typedef struct {
+  module_id_t mod;
+  rnti_t      rnti;  // 0: free slot
+  rb_id_t     rb_id;
+  pdcp_sn_t   next_pdcp_tx_sn, next_pdcp_rx_sn, last_submitted_pdcp_rx_sn;
+  pdcp_hfn_t  tx_hfn, rx_hfn;
+} pdcp_reest_state_t;
+static pdcp_reest_state_t pdcp_reest_state[MAX_MOBILES_PER_ENB * 4];
+
+void pdcp_save_drb_state_for_reestablishment(module_id_t mod, rnti_t old_rnti, rnti_t new_rnti)
+{
+  for (rb_id_t rb_id = 1; rb_id < NB_RB_MAX; rb_id++) {
+    pdcp_t *p = NULL;
+    if (hashtable_get(pdcp_coll_p, PDCP_COLL_KEY_VALUE(mod, old_rnti, ENB_FLAG_YES, rb_id, SRB_FLAG_NO), (void **)&p) != HASH_TABLE_OK
+        || p->rlc_mode != RLC_MODE_AM)
+      continue;
+
+    pdcp_reest_state_t *s = NULL;
+    for (int i = 0; i < sizeofArray(pdcp_reest_state) && s == NULL; i++)
+      if (pdcp_reest_state[i].rnti == 0 || (pdcp_reest_state[i].rnti == new_rnti && pdcp_reest_state[i].rb_id == rb_id))
+        s = &pdcp_reest_state[i];
+    if (s == NULL) {
+      LOG_W(PDCP, "no room to keep DRB %ld state of RNTI %x across reestablishment\n", rb_id, old_rnti);
+      continue;
+    }
+    *s = (pdcp_reest_state_t){.mod = mod, .rnti = new_rnti, .rb_id = rb_id,
+                              .next_pdcp_tx_sn = p->next_pdcp_tx_sn, .next_pdcp_rx_sn = p->next_pdcp_rx_sn,
+                              .last_submitted_pdcp_rx_sn = p->last_submitted_pdcp_rx_sn,
+                              .tx_hfn = p->tx_hfn, .rx_hfn = p->rx_hfn};
+    LOG_I(PDCP, "reestablishment %x -> %x: keeping DRB %ld state (tx %u/%u, rx %u/%u)\n",
+          old_rnti, new_rnti, rb_id, p->tx_hfn, p->next_pdcp_tx_sn, p->rx_hfn, p->next_pdcp_rx_sn);
+  }
+}
+
+/* apply (and forget) the state saved for this DRB, if any */
+static void pdcp_restore_reestablishment_state(module_id_t mod, rnti_t rnti, pdcp_t *p)
+{
+  for (int i = 0; i < sizeofArray(pdcp_reest_state); i++) {
+    pdcp_reest_state_t *s = &pdcp_reest_state[i];
+    if (s->rnti != rnti || s->mod != mod || s->rb_id != p->rb_id)
+      continue;
+    p->next_pdcp_tx_sn = s->next_pdcp_tx_sn;
+    p->next_pdcp_rx_sn = s->next_pdcp_rx_sn;
+    p->last_submitted_pdcp_rx_sn = s->last_submitted_pdcp_rx_sn;
+    p->tx_hfn = s->tx_hfn;
+    p->rx_hfn = s->rx_hfn;
+    s->rnti = 0;
+    LOG_I(PDCP, "RNTI %x DRB %ld continues tx %u/%u, rx %u/%u after reestablishment\n",
+          rnti, p->rb_id, p->tx_hfn, p->next_pdcp_tx_sn, p->rx_hfn, p->next_pdcp_rx_sn);
+  }
+}
 /*! \fn bool pdcp_config_req_asn1 (const protocol_ctxt_t* const ctxt_pP, srb_flag_t srb_flagP, uint32_t  action, rb_id_t rb_id,
  * uint8_t rb_sn, uint8_t rb_report, uint16_t header_compression_profile, uint8_t security_mode) \brief  Function for RRC to
  * configure a Radio Bearer. \param[in]  ctxt_pP           Running context. \param[in]  pdcp_pP            Pointer on PDCP
@@ -1841,6 +1894,8 @@ static bool pdcp_config_req_asn1(const protocol_ctxt_t *const ctxt_pP,
       pdcp_pP->rx_hfn                           = 0;
       pdcp_pP->last_submitted_pdcp_rx_sn        = 4095;
       pdcp_pP->first_missing_pdu                = -1;
+      if (srb_flagP == SRB_FLAG_NO && ctxt_pP->enb_flag == ENB_FLAG_YES)
+        pdcp_restore_reestablishment_state(ctxt_pP->module_id, ctxt_pP->rntiMaybeUEid, pdcp_pP);
       LOG_I(PDCP, PROTOCOL_PDCP_CTXT_FMT" Action ADD  LCID %d (%s id %ld) "
             "configured with SN size %d bits and RLC %s\n",
             PROTOCOL_PDCP_CTXT_ARGS(ctxt_pP,pdcp_pP),

@@ -297,6 +297,10 @@ void pdcp_add_UE(const protocol_ctxt_t *const  ctxt_pP);
 */
 bool pdcp_remove_UE(const protocol_ctxt_t *const  ctxt_pP);
 
+/* RRC connection reestablishment: the UE keeps the COUNTs of its AM DRBs (36.323 5.2), so remember them
+ * from the old RNTI's entities; they are applied when the DRBs are added again for the new RNTI */
+void pdcp_save_drb_state_for_reestablishment(module_id_t mod, rnti_t old_rnti, rnti_t new_rnti);
+
 /*! \fn void pdcp_mbms_run(const protocol_ctxt_t* const  ctxt_pP)
 * \brief Runs PDCP entity to let it handle incoming/outgoing SDUs
 * \param[in]  ctxt_pP           Running context.
