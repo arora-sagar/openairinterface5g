@@ -203,6 +203,11 @@ void exit_function(const char *file, const char *function, const int line, const
     exit(-1); // likely init not completed, prevent crash or hang, exit now...
 
   for (ru_id=0; ru_id<RC.nb_RU; ru_id++) {
+    /* the RU thread sees oai_exit, leaves its read loop and closes the device itself (stop_rf):
+     * closing it from here while it is still inside a UHD read crashes in libuhd and leaves the
+     * B2xx USB stream dirty, so give it a moment first */
+    for (int w = 0; w < 50 && RC.ru[ru_id] && RC.ru[ru_id]->rfdevice.trx_end_func; w++)
+      usleep(10000);
     if (RC.ru[ru_id] && RC.ru[ru_id]->rfdevice.trx_end_func) {
       RC.ru[ru_id]->rfdevice.trx_end_func(&RC.ru[ru_id]->rfdevice);
       RC.ru[ru_id]->rfdevice.trx_end_func = NULL;
@@ -600,6 +605,13 @@ int main ( int argc, char **argv )
     }
   }
   #endif
+
+  /* returning from main tears down libuhd's globals: let the RU threads leave UHD first
+   * (they close the device themselves in stop_rf, which clears trx_end_func) */
+  for (int ru_id = 0; ru_id < RC.nb_RU; ru_id++)
+    for (int w = 0; w < 100 && RC.ru[ru_id] && RC.ru[ru_id]->rfdevice.trx_end_func; w++)
+      usleep(10000);
+  usleep(100000); // RU TX thread: out of its last UHD send
 
   pdcp_module_cleanup();
   terminate_opt();

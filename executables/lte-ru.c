@@ -2057,6 +2057,7 @@ int start_rf(RU_t *ru) {
 int stop_rf(RU_t *ru) {
     if(ru->rfdevice.trx_end_func != NULL) {
       ru->rfdevice.trx_end_func(&ru->rfdevice);
+      ru->rfdevice.trx_end_func = NULL; // tear the device down only once (exit handler checks this)
     }
   return 0;
 }
