@@ -1507,7 +1507,15 @@ uint32_t rx_pucch(PHY_VARS_eNB *eNB,
 
         if (fmt==pucch_format1b) {
           uci_stats->pucch1b_trials++;
-          *(1+payload) = (stat_im<0) ? 1 : 2;
+          /* format 1b is QPSK with its points on the axes (36.211 Table 5.4.1-1): b(0)b(1) 00 -> 1, 11 -> -1,
+           * 10 -> j, 01 -> -j. Deciding each bit on the sign of one component made b(1) random for 00/11. */
+          if (abs(stat_re) >= abs(stat_im)) {
+            *payload = (stat_re < 0) ? 1 : 2;
+            *(1+payload) = *payload;
+          } else {
+            *payload = (stat_im > 0) ? 1 : 2;
+            *(1+payload) = (stat_im > 0) ? 2 : 1;
+          }
           uci_stats->current_pucch1b_stat_re = stat_re;
           uci_stats->current_pucch1b_stat_im = stat_im;
         }
