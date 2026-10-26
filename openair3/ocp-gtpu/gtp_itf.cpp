@@ -821,34 +821,9 @@ int gtpv1u_update_s1u_tunnel(const instance_t instance,
         create_tunnel_req->num_tunnels,
         create_tunnel_req->sgw_S1u_teid[0],
         create_tunnel_req->eps_bearer_id[0]);
-  pthread_mutex_lock(&globGtp.gtp_lock);
-  getInstRetInt(compatInst(instance));
-
-  if (inst->ue2te_mapping.find(create_tunnel_req->rnti) == inst->ue2te_mapping.end()) {
-    LOG_E(GTPU,
-          "[%ld] Update not already existing tunnel (new rnti %x, old rnti %x)\n",
-          instance,
-          create_tunnel_req->rnti,
-          prior_rnti);
-  }
-
-  auto it = inst->ue2te_mapping.find(prior_rnti);
-
-  if (it != inst->ue2te_mapping.end()) {
-    pthread_mutex_unlock(&globGtp.gtp_lock);
-    AssertFatal(false,
-                "logic bug: update of non-existing tunnel (new ue id %u, old ue id %u)\n",
-                create_tunnel_req->rnti,
-                prior_rnti);
-    /* we don't know if we need 4G or 5G PDCP and can therefore not create a
-     * new tunnel */
-    return 0;
-  }
-
-  inst->ue2te_mapping[create_tunnel_req->rnti] = it->second;
-  inst->ue2te_mapping.erase(it);
-  pthread_mutex_unlock(&globGtp.gtp_lock);
-  return 0;
+  /* move the tunnels to the new RNTI, including the incoming-TEID entries used to deliver DL packets;
+   * on failure the caller releases the UE */
+  return gtpv1u_update_ue_id(instance, prior_rnti, create_tunnel_req->rnti) == GTPNOK ? -1 : 0;
 }
 
 int gtpv1u_create_ngu_tunnel(const instance_t instance,
@@ -900,8 +875,9 @@ int gtpv1u_update_ue_id(const instance_t instanceP, ue_id_t old_ue_id, ue_id_t n
     return GTPNOK;
   }
 
-  for (unsigned i = 0; i < it->second.bearers.size(); ++i) {
-    teid_t incoming_teid = inst->ue2te_mapping[old_ue_id].bearers[i].teid_incoming;
+  // bearers is keyed by bearer id, not by position
+  for (auto &b : it->second.bearers) {
+    teid_t incoming_teid = b.second.teid_incoming;
     if (globGtp.te2ue_mapping[incoming_teid].ue_id == old_ue_id) {
       globGtp.te2ue_mapping[incoming_teid].ue_id = new_ue_id;
     }
