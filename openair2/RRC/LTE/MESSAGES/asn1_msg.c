@@ -1395,6 +1395,13 @@ uint8_t do_SIB23(uint8_t Mod_id,
     = rrconfig->pusch_hoppingOffset;
   (*sib2)->radioResourceConfigCommon.pusch_ConfigCommon.pusch_ConfigBasic.enable64QAM
     = rrconfig->pusch_enable64QAM;
+  /* 36.331: enable64QAM alone only covers UEs that can fall back to category 5/8; Rel-12 UL categories
+   * (e.g. ue-CategoryUL 13) also need enable64QAM-v1270, otherwise they keep using 16QAM for MCS 21-28 */
+  if (rrconfig->pusch_enable64QAM) {
+    (*sib2)->radioResourceConfigCommon.ext3 = CALLOC(1, sizeof(struct LTE_RadioResourceConfigCommonSIB__ext3));
+    (*sib2)->radioResourceConfigCommon.ext3->pusch_ConfigCommon_v1270 = CALLOC(1, sizeof(LTE_PUSCH_ConfigCommon_v1270_t));
+    (*sib2)->radioResourceConfigCommon.ext3->pusch_ConfigCommon_v1270->enable64QAM_v1270 = LTE_PUSCH_ConfigCommon_v1270__enable64QAM_v1270_true;
+  }
   (*sib2)->radioResourceConfigCommon.pusch_ConfigCommon.ul_ReferenceSignalsPUSCH.groupHoppingEnabled
     = rrconfig->pusch_groupHoppingEnabled;
   (*sib2)->radioResourceConfigCommon.pusch_ConfigCommon.ul_ReferenceSignalsPUSCH.groupAssignmentPUSCH
