@@ -2563,6 +2563,13 @@ void ulsch_scheduler_pre_processor_fairRR(module_id_t module_idP,
     first_rb[CC_id] = num_pucch_rb;
     ue_num_temp       = ulsch_ue_select[CC_id].ue_num;
 
+    /* The PRACH entry is appended after the UEs, so reserve its RBs before allocating anything:
+     * PUSCH on the PRACH RBs is detected as preambles (false RACH) and corrupts real ones.
+     * Assumes PRACH sits at the bottom of the band (small prach_FreqOffset). */
+    for (int i = 0; i < ulsch_ue_select[CC_id].ue_num; i++)
+      if (ulsch_ue_select[CC_id].list[i].ue_priority == SCH_UL_PRACH)
+        first_rb[CC_id] = max(first_rb[CC_id], ulsch_ue_select[CC_id].list[i].start_rb + ulsch_ue_select[CC_id].list[i].nb_rb);
+
     for ( ulsch_ue_num = 0; ulsch_ue_num < ulsch_ue_select[CC_id].ue_num; ulsch_ue_num++ ) {
       UE_id = ulsch_ue_select[CC_id].list[ulsch_ue_num].UE_id;
 
@@ -2573,7 +2580,6 @@ void ulsch_scheduler_pre_processor_fairRR(module_id_t module_idP,
       }
 
       if (ulsch_ue_select[CC_id].list[ulsch_ue_num].ue_priority == SCH_UL_PRACH) {
-        first_rb[CC_id] = ulsch_ue_select[CC_id].list[ulsch_ue_num].start_rb+ulsch_ue_select[CC_id].list[ulsch_ue_num].nb_rb;
         ue_num_temp--;
         continue;
       }
