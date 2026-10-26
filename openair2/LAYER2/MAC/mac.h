@@ -916,7 +916,7 @@ typedef struct {
   uint64_t pusch_rx_error_num[NFAPI_CC_MAX];
   uint64_t pusch_rx_error_num_old[NFAPI_CC_MAX];
   double  pusch_bler[NFAPI_CC_MAX];
-  uint8_t  mcs_offset[NFAPI_CC_MAX];
+  int8_t   mcs_offset[NFAPI_CC_MAX]; // UL MCS = 20 - mcs_offset; negative (down to -8) only with UL 64QAM
   uint16_t feedback_cnt[NFAPI_CC_MAX];
   uint16_t timing_advance;
   uint16_t timing_advance_r9;

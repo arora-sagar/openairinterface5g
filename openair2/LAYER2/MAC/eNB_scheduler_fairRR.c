@@ -2661,7 +2661,9 @@ void ulsch_scheduler_pre_processor_fairRR(module_id_t module_idP,
 
           if (eNB->use_mcs_offset == 1) {
             if(bler < eNB->bler_lower) {
-              if(UE_info->UE_sched_ctrl[UE_id].mcs_offset[CC_id] !=0) {
+              /* climb above MCS 20 (into 64QAM) only when SIB2 enables UL 64QAM */
+              const int min_offset = eNB->common_channels[CC_id].radioResourceConfigCommon->pusch_ConfigCommon.pusch_ConfigBasic.enable64QAM ? -8 : 0;
+              if(UE_info->UE_sched_ctrl[UE_id].mcs_offset[CC_id] > min_offset) {
                 UE_info->UE_sched_ctrl[UE_id].mcs_offset[CC_id]--;
               }
             }
@@ -2675,6 +2677,7 @@ void ulsch_scheduler_pre_processor_fairRR(module_id_t module_idP,
         }
         snr = UE_info->UE_sched_ctrl[UE_id].pusch_snr_avg[CC_id];
  
+        /* start at MCS 20 and let the BLER loop (mcs_offset) move it: down on errors, up to 28 with UL 64QAM */
         mcs = 20 - UE_info->UE_sched_ctrl[UE_id].mcs_offset[CC_id];
         if(mcs < 6) {
           mcs = 6;
