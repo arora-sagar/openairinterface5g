@@ -861,8 +861,8 @@ uci_procedures(PHY_VARS_eNB *eNB,
             if (uci->type==HARQ_SR && metric[0] > metric_SR) SR_payload = 0;
             else if (SR_payload == 1) fill_sr_indication(i, eNB,uci->rnti,frame,subframe,metric_SR);
 
-            if (uci->type==HARQ_SR && metric[0] <= metric_SR) {
-              SR_payload = 1;
+            /* the ACK is on the SR resource only for a positive (detected) SR */
+            if (uci->type==HARQ_SR && SR_payload == 1 && metric[0] <= metric_SR) {
               metric[0] = rx_pucch(eNB,
                                    pucch_format1b,
                                    uci->ue_id,
