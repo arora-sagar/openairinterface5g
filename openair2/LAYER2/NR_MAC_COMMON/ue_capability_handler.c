@@ -230,6 +230,13 @@ NR_feature_set_ids_t get_feature_set_ids(const NR_UE_NR_Capability_t *cap, int b
         AssertFatal(false, "Unsupported NR RAT type\n");
     }
   }
+  if (type == EN_DC) {
+    /* EN-DC band combinations are signalled in UE-MRDC-Capability (TS 38.331), which is not
+     * passed here: the UE-NR-Capability usually holds NR-only combinations. Use the feature set
+     * of an NR combination with this band, it describes the same NR carrier. */
+    LOG_D(NR_MAC, "No EN-DC band combination for band %d in UE-NR-Capability, using NR band combinations\n", band);
+    return get_feature_set_ids(cap, band, scs, bw_mhz, NR_SA);
+  }
   LOG_E(NR_MAC, "No band combination matched the input band %d\n", band);
   return (NR_feature_set_ids_t){0};
 }
